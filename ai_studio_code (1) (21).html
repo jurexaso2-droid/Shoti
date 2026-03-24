@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Shoti</title>
+    <style>
+        :root {
+            --bg-color: #0f0f11;
+            --card-bg: #1a1a1f;
+            --text-main: #ffffff;
+            --text-muted: #a1a1aa;
+            --accent: #ff0050;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .shoti-container {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 400px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            padding: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        .header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 9 / 16;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-message {
+            position: absolute;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .error-message {
+            color: #ff4444;
+        }
+
+        .caption-details {
+            padding: 15px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .caption-details p {
+            margin: 5px 0;
+        }
+
+        .caption-details .highlight {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 15px;
+            text-align: center;
+            font-style: italic;
+        }
+
+        button.fetch-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+        }
+
+        button.fetch-btn:hover {
+            background-color: #cc0040;
+        }
+
+        button.fetch-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="shoti-container">
+        <div class="header">
+            <h2>🎥 Random Shoti</h2>
+        </div>
+
+        <div class="video-wrapper">
+            <!-- Loading and Error States -->
+            <div id="loading" class="status-message">⏳ Fetching a fresh Shoti for you... 🎥</div>
+            <div id="error" class="status-message error-message hidden">❌ Failed to fetch Shoti right now.<br><br>Try again in a few seconds!</div>
+            
+            <!-- Video Player -->
+            <video id="video-player" class="hidden" controls playsinline autoplay loop></video>
+        </div>
+
+        <div id="info-section" class="caption-details hidden">
+            <p>👤 <strong>Nickname:</strong> <span id="nickname"></span></p>
+            <p>📛 <strong>Username:</strong> @<span id="username"></span></p>
+            <p>⏱ <strong>Duration:</strong> <span id="duration"></span> seconds</p>
+            <p>🌍 <strong>Region:</strong> <span id="region"></span></p>
+            <p class="highlight">🔥 Enjoy Master! 💦</p>
+        </div>
+
+        <button id="fetch-btn" class="fetch-btn">Get Shoti</button>
+    </div>
+
+    <script>
+        // DOM Elements
+        const fetchBtn = document.getElementById('fetch-btn');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const videoPlayer = document.getElementById('video-player');
+        const infoSection = document.getElementById('info-section');
+
+        // Text Elements
+        const nicknameEl = document.getElementById('nickname');
+        const usernameEl = document.getElementById('username');
+        const durationEl = document.getElementById('duration');
+        const regionEl = document.getElementById('region');
+
+        async function fetchShoti() {
+            // 1. Set Loading State
+            fetchBtn.disabled = true;
+            fetchBtn.innerText = "Loading...";
+            
+            loadingDiv.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            videoPlayer.classList.add('hidden');
+            infoSection.classList.add('hidden');
+
+            // Pause and clear previous video
+            videoPlayer.pause();
+            videoPlayer.src = "";
+
+            try {
+                // 2. Call the API using a CORS Proxy bypass
+                const targetUrl = encodeURIComponent("https://betadash-shoti-yazky.vercel.app/shotizxx?apikey=shipazu");
+                const corsProxyUrl = `https://api.allorigins.win/raw?url=${targetUrl}`;
+                
+                const res = await fetch(corsProxyUrl);
+
+                if (!res.ok) throw new Error("API request failed");
+
+                const data = await res.json();
+
+                // 3. Extract Data
+                const {
+                    shotiurl,
+                    username,
+                    nickname,
+                    duration,
+                    region,
+                    cover_image
+                } = data;
+
+                if (!shotiurl) throw new Error("No video URL received");
+
+                // 4. Update the DOM
+                videoPlayer.src = shotiurl;
+                videoPlayer.poster = cover_image;
+                
+                nicknameEl.innerText = nickname || "Unknown";
+                usernameEl.innerText = username || "Unknown";
+                durationEl.innerText = duration || "?";
+                regionEl.innerText = region || "Unknown";
+
+                // 5. Hide loading, show video & info
+                loadingDiv.classList.add('hidden');
+                videoPlayer.classList.remove('hidden');
+                infoSection.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Shoti error:", error);
+                
+                // Show Error State
+                loadingDiv.classList.add('hidden');
+                errorDiv.classList.remove('hidden');
+            } finally {
+                // Re-enable the button
+                fetchBtn.disabled = false;
+                fetchBtn.innerText = "Get Another Shoti";
+            }
+        }
+
+        // Attach event listener
+        fetchBtn.addEventListener('click', fetchShoti);
+
+        // Fetch one immediately when the page loads
+        window.onload = fetchShoti;
+    </script>
+</body>
+</html>
