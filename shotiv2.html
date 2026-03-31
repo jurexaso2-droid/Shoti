@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Shoti - Real Swipe</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #fe2c55;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background: #000;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        /* The container that holds the current and next video */
+        #video-stack {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            will-change: transform;
+        }
+
+        .video-page {
+            height: 100vh;
+            width: 100vw;
+            flex-shrink: 0;
+            position: relative;
+            background: #000;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 15px;
+            color: white;
+            text-shadow: 1px 1px 5px rgba(0,0,0,0.8);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .side-bar {
+            position: absolute;
+            right: 15px;
+            bottom: 150px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            color: white;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .icon-btn span {
+            display: block;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background-size: cover;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="video-stack">
+        <!-- CURRENT VIDEO -->
+        <div class="video-page" id="page-current">
+            <video id="vid-current" autoplay loop playsinline></video>
+            <div class="side-bar">
+                <div id="avatar-current" class="avatar"></div>
+                <div class="icon-btn"><i class="fas fa-heart"></i><span>Like</span></div>
+                <div class="icon-btn"><i class="fas fa-comment"></i><span>Comment</span></div>
+                <div class="icon-btn"><i class="fas fa-share"></i><span>Share</span></div>
+            </div>
+            <div class="overlay">
+                <h3 id="user-current">@loading...</h3>
+                <p id="desc-current">✨</p>
+            </div>
+        </div>
+
+        <!-- NEXT VIDEO (Peeking from bottom) -->
+        <div class="video-page" id="page-next">
+            <video id="vid-next" loop playsinline muted></video>
+            <div class="side-bar">
+                <div id="avatar-next" class="avatar"></div>
+                <div class="icon-btn"><i class="fas fa-heart"></i><span>Like</span></div>
+            </div>
+            <div class="overlay">
+                <h3 id="user-next">@next_user</h3>
+                <p id="desc-next">✨</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://betadash-api-swordslush-production.up.railway.app/shoti";
+        const stack = document.getElementById('video-stack');
+        
+        // Data states
+        let currentData = null;
+        let nextData = null;
+
+        // Touch handling
+        let startY = 0;
+        let currentTranslate = 0;
+        let isDragging = false;
+        let screenHeight = window.innerHeight;
+
+        async function fetchVideo() {
+            try {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                return data.status ? data.result : null;
+            } catch (e) { return null; }
+        }
+
+        async function init() {
+            // Load first video
+            currentData = await fetchVideo();
+            updateUI('current', currentData);
+            
+            // Background load the next video immediately
+            nextData = await fetchVideo();
+            updateUI('next', nextData);
+        }
+
+        function updateUI(type, data) {
+            if (!data) return;
+            document.getElementById(`vid-${type}`).src = data.shotiurl;
+            document.getElementById(`user-${type}`).innerText = `@${data.username}`;
+            document.getElementById(`desc-${type}`).innerText = data.title || "✨";
+            document.getElementById(`avatar-${type}`).style.backgroundImage = `url('${data.cover}')`;
+        }
+
+        // --- GESTURE LOGIC ---
+
+        window.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+            isDragging = true;
+            stack.style.transition = 'none'; // No delay while dragging
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const touchY = e.touches[0].clientY;
+            const diff = touchY - startY;
+
+            // Only allow dragging UP
+            if (diff < 0) {
+                currentTranslate = diff;
+                stack.style.transform = `translateY(${currentTranslate}px)`;
+            }
+        });
+
+        window.addEventListener('touchend', async (e) => {
+            isDragging = false;
+            const threshold = screenHeight / 5; // Must swipe at least 20% of screen
+
+            if (Math.abs(currentTranslate) > threshold) {
+                // SUCCESSFUL SWIPE UP
+                stack.style.transition = 'transform 0.3s ease-out';
+                stack.style.transform = `translateY(-100vh)`;
+
+                setTimeout(async () => {
+                    // 1. Move Next data to Current
+                    currentData = nextData;
+                    updateUI('current', currentData);
+                    
+                    // 2. Snap stack back to top instantly
+                    stack.style.transition = 'none';
+                    stack.style.transform = `translateY(0)`;
+                    document.getElementById('vid-current').play();
+
+                    // 3. Reset translation variable
+                    currentTranslate = 0;
+
+                    // 4. Pre-fetch new Next video in background
+                    nextData = await fetchVideo();
+                    updateUI('next', nextData);
+                }, 300);
+
+            } else {
+                // CANCEL SWIPE - Snap back to current
+                stack.style.transition = 'transform 0.3s ease-out';
+                stack.style.transform = `translateY(0)`;
+                currentTranslate = 0;
+            }
+        });
+
+        // Desktop Mouse Support (Wheel)
+        window.addEventListener('wheel', (e) => {
+            if (e.deltaY > 50 && !isDragging) {
+                // Trigger auto-swipe up
+                currentTranslate = -threshold - 10; 
+                const event = new Event('touchend');
+                window.dispatchEvent(event);
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
